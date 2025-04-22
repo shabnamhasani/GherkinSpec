@@ -7,6 +7,7 @@ from dataprocessing import (
     compute_pair_stats,
 )
 from boxplot import plot_boxplots_by_criterion,plot_boxplots_by_criterion_and_model,plot_heatmaps_by_criterion,plot_beeswarm_by_criterion,plot_beeswarm_by_criterion_and_model
+from wilcoxon_stats import compute_pair_wilcoxon,compute_model_wilcoxon
 import os
 
 def main():
@@ -17,6 +18,7 @@ def main():
     output_stats_dir = "/home/shabnam/Gherkin/output/pair_stats"
     output_heatmap_dir = "/home/shabnam/Gherkin/output/heatmaps"
     output_beeswarm_dir = "/home/shabnam/Gherkin/output/beeswarm"
+    output_wilcoxon_dir = "/home/shabnam/Gherkin/output/wilcoxon"
 
     # Step 1: Read and process data
     all_user_data, task_ids, criteria_names = read_excel_data(input_dir, rating_map)
@@ -59,6 +61,28 @@ def main():
     # Step 7: Generate beeswarm plots
     plot_beeswarm_by_criterion(long_df, qualitative_mappings, output_beeswarm_dir)
     plot_beeswarm_by_criterion_and_model(long_df, qualitative_mappings, output_beeswarm_dir)
+
+    # Step 8: Compute Wilcoxon rank-sum tests
+    try:
+        wilcoxon_results = compute_pair_wilcoxon(long_df)
+        
+        # For each criterion, save results to CSV (similar to what you do with pair_stats)
+
+        for criterion, df in wilcoxon_results.items():
+            out_file = os.path.join(output_wilcoxon_dir, f"{criterion}_pair_wilcoxon.csv")
+            df.to_csv(out_file, index=False)
+    
+    except Exception as e:
+        print(f"Error computing Wilcoxon stats: {e}")
+
+    # Option 1: Compare a specific pair of models (e.g., "Llama" vs "Claude")
+    model_comparison = ("Llama", "Claude")
+    wilcox_results = compute_model_wilcoxon(long_df, model_pair=model_comparison)
+
+    for crit, result_df in wilcox_results.items():
+        output_path = os.path.join(output_wilcoxon_dir, f"{crit}_model_wilcoxon.csv")
+        result_df.to_csv(output_path, index=False)
+
 
 
 if __name__ == "__main__":
