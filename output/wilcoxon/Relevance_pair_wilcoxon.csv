@@ -1,6 +1,6 @@
-Pair,WilcoxonStat,p-value
-"['P1_Parham_Sheet1', 'P2_Dipeeka_Sheet1']",-0.7505553499465134,0.4529203011037244
-"['P3_MO_Sheet1', 'P4_Armina_Sheet1']",0.0,1.0
-"['P5_ Delaram_Sheet1', 'P6_ Baharin_Sheet1']",1.7320508075688772,0.0832645166635504
-"['P7_ Jia_Sheet1', 'P8_ Negin_Sheet1']",-0.3464101615137754,0.7290344895388041
-"['P9_ Pouya_Sheet1', 'P10_ Diane_Sheet1']",-0.08660254037844385,0.9309874465595671
+Pair,WilcoxonStat,p-value,A12,A12_desc
+"['P1_Parham_Sheet1', 'P2_Dipeeka_Sheet1']",-0.7505553499465134,0.4529203011037244,0.4097222222222222,Small
+"['P3_MO_Sheet1', 'P4_Armina_Sheet1']",0.0,1.0,0.5,negligible
+"['P5_ Delaram_Sheet1', 'P6_ Baharin_Sheet1']",1.7320508075688772,0.0832645166635504,0.7083333333333334,Medium
+"['P7_ Jia_Sheet1', 'P8_ Negin_Sheet1']",-0.3464101615137754,0.7290344895388041,0.45833333333333337,negligible
+"['P9_ Pouya_Sheet1', 'P10_ Diane_Sheet1']",-0.08660254037844385,0.9309874465595671,0.48958333333333337,negligible

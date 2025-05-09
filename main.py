@@ -6,7 +6,7 @@ from dataprocessing import (
     rating_map,
     compute_pair_stats,
 )
-from boxplot import plot_boxplots_by_criterion,plot_boxplots_by_criterion_and_model,plot_heatmaps_by_criterion,plot_beeswarm_by_criterion,plot_beeswarm_by_criterion_and_model
+from boxplot import plot_boxplots_by_criterion,plot_boxplots_by_criterion_and_model,plot_heatmaps_by_criterion,plot_beeswarm_by_criterion,plot_beeswarm_by_criterion_and_model,plot_stacked_bar_by_criterion,plot_stacked_bar_by_criterion_and_model
 from wilcoxon_stats import compute_pair_wilcoxon,compute_model_wilcoxon
 import os
 
@@ -19,6 +19,7 @@ def main():
     output_heatmap_dir = "/home/shabnam/Gherkin/output/heatmaps"
     output_beeswarm_dir = "/home/shabnam/Gherkin/output/beeswarm"
     output_wilcoxon_dir = "/home/shabnam/Gherkin/output/wilcoxon"
+    output_stacked_bar_dir = "/home/shabnam/Gherkin/output/stacked_bar"
 
     # Step 1: Read and process data
     all_user_data, task_ids, criteria_names = read_excel_data(input_dir, rating_map)
@@ -82,6 +83,9 @@ def main():
     for crit, result_df in wilcox_results.items():
         output_path = os.path.join(output_wilcoxon_dir, f"{crit}_model_wilcoxon.csv")
         result_df.to_csv(output_path, index=False)
+    #step 9: Generate stacked bar plots
+    plot_stacked_bar_by_criterion(long_df, qualitative_mappings, output_stacked_bar_dir)
+    plot_stacked_bar_by_criterion_and_model(long_df, qualitative_mappings, output_stacked_bar_dir)
 
 
 

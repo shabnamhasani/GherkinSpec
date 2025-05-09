@@ -67,7 +67,6 @@ def plot_boxplots_by_criterion(long_df, qualitative_mappings, output_dir):
         plt.savefig(plot_path)
         plt.close()
         # print(f"Saved boxplot for {criterion} to: {plot_path}")
-
 def plot_boxplots_by_criterion_and_model(long_df, qualitative_mappings, output_dir):
     """
     Generates separate boxplots per criterion for each model.
@@ -126,7 +125,6 @@ def plot_boxplots_by_criterion_and_model(long_df, qualitative_mappings, output_d
             plt.savefig(plot_path)
             plt.close()
             print(f"Saved boxplot for {criterion} for {model} to: {plot_path}")
-
 def plot_heatmaps_by_criterion(long_df, qualitative_mappings, output_dir):
     """
     Generates a heatmap per criterion, showing task scores for each user using qualitative labels.
@@ -191,7 +189,6 @@ def plot_heatmaps_by_criterion(long_df, qualitative_mappings, output_dir):
         plt.savefig(plot_path)
         plt.close()
         print(f"✅ Saved heatmap for {criterion} to: {plot_path}")
-
 def plot_beeswarm_by_criterion(long_df, qualitative_mappings, output_dir):
 
     """
@@ -246,7 +243,6 @@ def plot_beeswarm_by_criterion(long_df, qualitative_mappings, output_dir):
         plot_path = os.path.join(output_dir, f"{criterion}_beeswarm.pdf")
         plt.savefig(plot_path)
         plt.close()
-
 def plot_beeswarm_by_criterion_and_model(long_df, qualitative_mappings, output_dir):
     """
     Generates beeswarm (strip) plots per criterion and per model.
@@ -317,3 +313,110 @@ def plot_beeswarm_by_criterion_and_model(long_df, qualitative_mappings, output_d
             plot_path = os.path.join(output_dir, f"{criterion}_{model}_beeswarm.pdf")
             plt.savefig(plot_path)
             plt.close()
+# Updated functions with directory checks, imports, and improved layout adjustments
+
+import os
+import matplotlib.pyplot as plt
+
+def plot_stacked_bar_by_criterion(long_df, qualitative_mappings, output_dir):
+    """
+    For each criterion, draw a single horizontal stacked bar whose
+    segments are the counts of each rating (label), ordered from
+    highest→lowest. Saves one PDF per criterion in output_dir.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    df = long_df.copy()
+    df["Criterion_clean"] = df["Criterion"].str.strip()
+
+    for criterion, mapping in qualitative_mappings.items():
+        sub = df[df["Criterion_clean"] == criterion]
+        if sub.empty:
+            print(f"⚠️ No data for '{criterion}'")
+            continue
+
+        keys = sorted(mapping.keys(), reverse=True)
+        labels = [mapping[k] for k in keys]
+        counts = sub["Rating (num)"].value_counts().reindex(keys, fill_value=0)
+
+        fig, ax = plt.subplots(figsize=(10, 2))
+        left = 0
+        for k, lbl in zip(keys, labels):
+            cnt = counts.loc[k]
+            ax.barh(0, cnt, left=left, height=0.6, label=lbl)
+            if cnt > 0:
+                ax.text(left + cnt / 2, 0, str(cnt),
+                        va="center", ha="center",
+                        color="white", fontweight="bold", fontsize=10)
+            left += cnt
+
+        ax.set_xlim(0, left)
+        ax.set_ylim(-0.5, 0.5)
+        ax.set_yticks([])
+        ax.set_xlabel("Count")
+        ax.set_title(f"{criterion} distribution", fontsize=14)
+
+        # Legend outside at top-right
+        legend = ax.legend(
+            ncol=1,
+            loc="upper left",
+            bbox_to_anchor=(1.3, 1.0),
+            borderaxespad=0
+        )
+
+        # Reserve space for the legend
+        fig.subplots_adjust(left=0.05, right=0.60, top=0.85)
+
+        out_path = os.path.join(output_dir, f"{criterion.replace(' ', '_')}_stacked_bar.pdf")
+        fig.savefig(out_path, bbox_inches="tight")
+        plt.close(fig)
+
+def plot_stacked_bar_by_criterion_and_model(long_df, qualitative_mappings, output_dir):
+    """
+    For each criterion × model, draw a horizontal stacked‐bar of counts
+    and save one PDF per (criterion, model).
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    df = long_df.copy()
+    df["Criterion_clean"] = df["Criterion"].str.strip()
+    models = df["Model"].dropna().unique()
+
+    for criterion, mapping in qualitative_mappings.items():
+        for model in models:
+            sub = df[(df["Criterion_clean"] == criterion) & (df["Model"] == model)]
+            if sub.empty:
+                continue
+
+            keys = sorted(mapping.keys(), reverse=True)
+            labels = [mapping[k] for k in keys]
+            counts = sub["Rating (num)"].value_counts().reindex(keys, fill_value=0)
+
+            fig, ax = plt.subplots(figsize=(10, 2))
+            left = 0
+            for k, lbl in zip(keys, labels):
+                cnt = counts.loc[k]
+                ax.barh(0, cnt, left=left, height=0.6, label=lbl)
+                if cnt > 0:
+                    ax.text(left + cnt / 2, 0, str(cnt),
+                            va="center", ha="center",
+                            color="white", fontweight="bold", fontsize=10)
+                left += cnt
+
+            ax.set_xlim(0, left)
+            ax.set_ylim(-0.5, 0.5)
+            ax.set_yticks([])
+            ax.set_xlabel("Count")
+            ax.set_title(f"{criterion} distribution — {model}", fontsize=14)
+
+            ax.legend(
+                ncol=1,
+                loc="upper left",
+                bbox_to_anchor=(1.3, 1.0),
+                borderaxespad=0
+            )
+            fig.subplots_adjust(left=0.05, right=0.60, top=0.85)
+
+            fname = f"{criterion.replace(' ', '_')}_{model}_stacked_bar.pdf"
+            out_path = os.path.join(output_dir, fname)
+            fig.savefig(out_path, bbox_inches="tight")
+            plt.close(fig)
+

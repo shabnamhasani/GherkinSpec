@@ -1,2 +1,2 @@
-ModelPair,WilcoxonStat,p-value,n1,n2
-Llama vs Claude,0.6692014483788845,0.5033669824581061,60,60
+ModelPair,WilcoxonStat,p-value,n1,n2,A12,A12_desc
+Llama vs Claude,0.6692014483788845,0.5033669824581061,60,60,0.5354166666666667,negligible

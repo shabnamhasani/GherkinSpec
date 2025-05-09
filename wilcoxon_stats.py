@@ -3,6 +3,54 @@ import pandas as pd
 from scipy.stats import ranksums
 from itertools import combinations
 
+def Average(lst):
+    return sum(lst) / len(lst)
+
+def a12(lst1, lst2, rev=True):
+    """
+    Compute Vargha–Delaney A12 and interpret magnitude.
+    """
+    # decide direction
+    if Average(lst1) < Average(lst2):
+        rev = False
+
+    more = same = 0.0
+    for x in lst1:
+        for y in lst2:
+            if x == y:
+                same += 1
+            elif rev and x > y:
+                more += 1
+            elif not rev and x < y:
+                more += 1
+
+    res = (more + 0.5 * same) / (len(lst1) * len(lst2))
+
+    # interpret
+    if res > 0.71:
+        desc = "Large"
+    elif res > 0.64:
+        desc = "Medium"
+    elif res > 0.56:
+        desc = "Small"
+    else:
+        desc = "negligible"
+
+    if not rev:
+        res = 1 - res
+        # flip interpretation thresholds for reversed
+        if res < 0.29:
+            desc = "Large"
+        elif res < 0.36:
+            desc = "Medium"
+        elif res < 0.44:
+            desc = "Small"
+        else:
+            desc = "negligible"
+
+    return res, desc
+
+
 def compute_pair_wilcoxon(long_df, pair_size=2, rating_col="Rating (num)"):
     """
     Perform Wilcoxon rank-sum tests on user pairs for each criterion.
@@ -68,19 +116,24 @@ def compute_pair_wilcoxon(long_df, pair_size=2, rating_col="Rating (num)"):
             # If either is empty, skip
             if user1_data.empty or user2_data.empty:
                 pair_results.append({
-                    "Pair": pair,
-                    "WilcoxonStat": None,
-                    "p-value": None
-                })
+                "Pair":        pair,
+                "WilcoxonStat": None,
+                "p-value":     None,
+                "A12":         None,
+                "A12_desc":    None
+            })
                 continue
 
             # Perform Wilcoxon rank-sum test
             stat, pval = ranksums(user1_data, user2_data)
-            
+            a12_val, a12_desc = a12(user1_data.tolist(), user2_data.tolist())
+
             pair_results.append({
-                "Pair": pair,
+                "Pair":        pair,
                 "WilcoxonStat": stat,
-                "p-value": pval
+                "p-value":     pval,
+                "A12":         a12_val,
+                "A12_desc":    a12_desc
             })
 
         results_by_criterion[criterion] = pd.DataFrame(pair_results)
@@ -147,17 +200,19 @@ def compute_model_wilcoxon(long_df, rating_col="Rating (num)", model_pair=None):
 
             # If one of the groups is empty, store None for the statistics.
             if n_a == 0 or n_b == 0:
-                stat = None
-                pval = None
+                stat = pval = a12_val = a12_desc = None
             else:
                 stat, pval = ranksums(group_a, group_b)
+                a12_val, a12_desc = a12(group_a.tolist(), group_b.tolist())
 
             pair_results.append({
                 "ModelPair": f"{model_a} vs {model_b}",
                 "WilcoxonStat": stat,
                 "p-value": pval,
                 "n1": n_a,
-                "n2": n_b
+                "n2": n_b,
+                "A12":          a12_val,
+                "A12_desc":     a12_desc
             })
 
         # Store the DataFrame of results for the criterion
