@@ -1,8 +1,8 @@
 import seaborn as sns
 import os
 import matplotlib.pyplot as plt
-import re
 import pandas as pd
+import matplotlib.colors as mcolors
 
 def plot_boxplots_by_criterion(long_df, qualitative_mappings, output_dir):
     """
@@ -72,8 +72,7 @@ def plot_boxplots_by_criterion_and_model(long_df, qualitative_mappings, output_d
     Generates separate boxplots per criterion for each model.
     Saves each boxplot to output_dir.
     """
-    os.makedirs(output_dir, exist_ok=True)
-    
+    os.makedirs(output_dir, exist_ok=True)    
     # Define the same palette as in the first function
     box_colors = [
         "#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", 
@@ -130,9 +129,6 @@ def plot_heatmaps_by_criterion(long_df, qualitative_mappings, output_dir):
     Generates a heatmap per criterion, showing task scores for each user using qualitative labels.
     Saves each heatmap to output_dir.
     """
-    import matplotlib.colors as mcolors
-
-    os.makedirs(output_dir, exist_ok=True)
 
     criteria = long_df["Criterion"].unique()
 
@@ -195,7 +191,6 @@ def plot_beeswarm_by_criterion(long_df, qualitative_mappings, output_dir):
     Generates a beeswarm (strip) plot per criterion with jitter to show all individual ratings.
     Saves each plot to output_dir.
     """
-    os.makedirs(output_dir, exist_ok=True)
 
     # You can define a palette of colors to cycle through
     point_colors = [
@@ -255,12 +250,6 @@ def plot_beeswarm_by_criterion_and_model(long_df, qualitative_mappings, output_d
                                    to qualitative labels.
       output_dir (str): Directory where the plots will be saved.
     """
-    import os
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-
-    os.makedirs(output_dir, exist_ok=True)
-
     # Define a palette of colors to cycle through -- using same colors as your beeswarm function.
     point_colors = [
         "#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C",
@@ -313,25 +302,19 @@ def plot_beeswarm_by_criterion_and_model(long_df, qualitative_mappings, output_d
             plot_path = os.path.join(output_dir, f"{criterion}_{model}_beeswarm.pdf")
             plt.savefig(plot_path)
             plt.close()
-# Updated functions with directory checks, imports, and improved layout adjustments
-
-import os
-import matplotlib.pyplot as plt
-
 def plot_stacked_bar_by_criterion(long_df, qualitative_mappings, output_dir):
     """
     For each criterion, draw a single horizontal stacked bar whose
     segments are the counts of each rating (label), ordered from
     highest→lowest. Saves one PDF per criterion in output_dir.
     """
-    os.makedirs(output_dir, exist_ok=True)
     df = long_df.copy()
     df["Criterion_clean"] = df["Criterion"].str.strip()
 
     for criterion, mapping in qualitative_mappings.items():
         sub = df[df["Criterion_clean"] == criterion]
         if sub.empty:
-            print(f"⚠️ No data for '{criterion}'")
+            # print(f"⚠️ No data for '{criterion}'")
             continue
 
         keys = sorted(mapping.keys(), reverse=True)
@@ -369,13 +352,11 @@ def plot_stacked_bar_by_criterion(long_df, qualitative_mappings, output_dir):
         out_path = os.path.join(output_dir, f"{criterion.replace(' ', '_')}_stacked_bar.pdf")
         fig.savefig(out_path, bbox_inches="tight")
         plt.close(fig)
-
 def plot_stacked_bar_by_criterion_and_model(long_df, qualitative_mappings, output_dir):
     """
     For each criterion × model, draw a horizontal stacked‐bar of counts
     and save one PDF per (criterion, model).
     """
-    os.makedirs(output_dir, exist_ok=True)
     df = long_df.copy()
     df["Criterion_clean"] = df["Criterion"].str.strip()
     models = df["Model"].dropna().unique()
@@ -419,4 +400,18 @@ def plot_stacked_bar_by_criterion_and_model(long_df, qualitative_mappings, outpu
             out_path = os.path.join(output_dir, fname)
             fig.savefig(out_path, bbox_inches="tight")
             plt.close(fig)
+def plot_token_scatter(token_df, output_dir):
+    """
+    Scatter‐plots Reg_tokens (x) vs. Gherkin_tokens (y) for all observations,
+    and saves to output_dir/token_scatter.pdf.
+    """
+    os.makedirs(output_dir, exist_ok=True)
 
+    plt.figure(figsize=(8,6))
+    plt.scatter(token_df['Reg_tokens'], token_df['Gherkin_tokens'], alpha=0.7)
+    plt.xlabel('Regulatory Provision Token Count')
+    plt.ylabel('Gherkin Specification Token Count')
+    plt.title('Reg vs. Gherkin Token Counts')
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'token_scatter.pdf'))
+    plt.close()

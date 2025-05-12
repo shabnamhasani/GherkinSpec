@@ -2,6 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 import re
+import tiktoken
+# GPT tokenizer setup (default: gpt-3.5-turbo; change if needed)
+ENCODING = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 # Rating conversion dictionary
 rating_map = {
@@ -173,6 +176,119 @@ def read_long_data(input_dir, rating_map):
                                 "Model": model_name,
                             })
     return pd.DataFrame(all_data_long)
+
+import os, re
+import pandas as pd
+
+def gpt_token_count(text):
+    return len(ENCODING.encode(text))
+
+def compute_unique_gherkin_counts(input_dir, user_task_model_map=user_task_model_map):
+    """
+    Reads every P<user>_*.xlsx, applies your user→(task→model) map,
+    counts Gherkin tokens for each (Task,Model), then drops duplicates
+    so each spec is counted exactly once.
+    Returns a DataFrame with columns: Task, Model, Gherkin_tokens.
+    """
+    records = []
+    for fname in os.listdir(input_dir):
+        if not fname.lower().endswith(('.xls','.xlsx')):
+            continue
+
+        # extract user number (e.g. "P3_Parham.xlsx" → 3)
+        m = re.search(r'P(\d+)_', fname)
+        if not m:
+            continue
+        user = int(m.group(1))
+
+        # open the workbook
+        wb = pd.ExcelFile(os.path.join(input_dir, fname))
+        for sheet in wb.sheet_names:
+            df = pd.read_excel(wb, sheet_name=sheet, header=None)
+
+            # your map tells us which 12 tasks this user actually saw
+            for task_id, model_id in user_task_model_map[user].items():
+                # rows 4–15 correspond to Task 1…12, so index = 3 + task_id
+                row = 3 + task_id
+                text = str(df.iat[row, 2])              # col 2 is the Gherkin spec
+                # tokens = len(text.split())              # whitespace split
+                tokens = gpt_token_count(text)
+
+                records.append({
+                    'Task':           task_id,
+                    'Model':          model_id,
+                    'Gherkin_tokens': tokens
+                })
+
+    # make a DataFrame and drop any duplicate (Task,Model) rows
+    gdf = pd.DataFrame.from_records(records)
+    return (
+        gdf
+        .drop_duplicates(subset=['Task','Model'])
+        .sort_values(['Task','Model'])
+        .reset_index(drop=True)
+    )
+
+import pandas as pd
+
+def compute_unique_reg_tokens(reg_file_path):
+    """
+    Reads the sheet of unique regulatory provisions (30 rows):
+      • Excel rows 2–31 (zero‐based index 1–30)
+      • Col 0: Task ID (1–30)
+      • Col 1: the provision text
+
+    Returns a DataFrame with columns: Task (int), Reg_tokens (int).
+    """
+    df = pd.read_excel(reg_file_path, header=None)
+
+    recs = []
+    for idx in range(1, 31):                # Excel row 2 through 31
+        # try to grab Task ID from col 0, else fall back to idx
+        try:
+            task = int(df.iat[idx, 0])
+        except:
+            task = idx
+
+        text = str(df.iat[idx, 1])         # second column = the provision
+        # tokens = len(text.split())
+        tokens = gpt_token_count(text)     # use the GPT tokenizer
+        recs.append({'Task': task, 'Reg_tokens': tokens})
+
+    return pd.DataFrame(recs)
+
+def compute_token_counts(input_dir):
+    """
+    Walks all Excel files and sheets, reads rows 4–15, columns 1 (reg text) 
+    and 2 (Gherkin text), tokenizes on whitespace, and returns a DataFrame 
+    with columns: UserNum, Task, Reg_tokens, Gherkin_tokens.
+    """
+    records = []
+    for file in os.listdir(input_dir):
+        if not file.lower().endswith(('.xlsx',' .xls')): continue
+        wb = pd.ExcelFile(os.path.join(input_dir, file))
+        user_match = re.search(r'(\d+)', os.path.splitext(file)[0])
+        user_num = int(user_match.group(1)) if user_match else None
+
+        for sheet in wb.sheet_names:
+            df = pd.read_excel(wb, sheet_name=sheet, header=None)
+            for row in range(4, 16):
+                task_cell = str(df.iat[row, 0])
+                m = re.search(r'(\d+)', task_cell)
+                if not m: continue
+                task = int(m.group(1))
+
+                reg_txt     = str(df.iat[row, 1])
+                gherkin_txt = str(df.iat[row, 2])
+
+                records.append({
+                    'UserNum':        user_num,
+                    'Task':           task,
+                    # 'Reg_tokens':     len(reg_txt.split()),
+                    'Reg_tokens':gpt_token_count(reg_txt),
+                    #'Gherkin_tokens': len(gherkin_txt.split()
+                    'Gherkin_tokens': gpt_token_count(gherkin_txt)})
+    return pd.DataFrame(records)
 
 def compute_pair_stats(long_df, pair_size=2):
     """

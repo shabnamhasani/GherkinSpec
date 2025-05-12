@@ -5,10 +5,14 @@ from dataprocessing import (
     read_long_data,
     rating_map,
     compute_pair_stats,
+    compute_unique_gherkin_counts,
+    compute_unique_reg_tokens,
+    compute_token_counts
 )
-from boxplot import plot_boxplots_by_criterion,plot_boxplots_by_criterion_and_model,plot_heatmaps_by_criterion,plot_beeswarm_by_criterion,plot_beeswarm_by_criterion_and_model,plot_stacked_bar_by_criterion,plot_stacked_bar_by_criterion_and_model
+from boxplot import plot_boxplots_by_criterion,plot_boxplots_by_criterion_and_model,plot_heatmaps_by_criterion,plot_beeswarm_by_criterion,plot_beeswarm_by_criterion_and_model,plot_stacked_bar_by_criterion,plot_stacked_bar_by_criterion_and_model,plot_token_scatter
 from wilcoxon_stats import compute_pair_wilcoxon,compute_model_wilcoxon
 import os
+import matplotlib.pyplot as plt
 
 def main():
 
@@ -20,6 +24,7 @@ def main():
     output_beeswarm_dir = "/home/shabnam/Gherkin/output/beeswarm"
     output_wilcoxon_dir = "/home/shabnam/Gherkin/output/wilcoxon"
     output_stacked_bar_dir = "/home/shabnam/Gherkin/output/stacked_bar"
+    output_token_dir = "/home/shabnam/Gherkin/output/token"
 
     # Step 1: Read and process data
     all_user_data, task_ids, criteria_names = read_excel_data(input_dir, rating_map)
@@ -86,6 +91,45 @@ def main():
     #step 9: Generate stacked bar plots
     plot_stacked_bar_by_criterion(long_df, qualitative_mappings, output_stacked_bar_dir)
     plot_stacked_bar_by_criterion_and_model(long_df, qualitative_mappings, output_stacked_bar_dir)
+
+    # Step 10: Generate token scatter plots
+    # 1) load the 60 unique Gherkin counts
+    # gherkin_df = compute_unique_gherkin_counts(input_dir)
+    # #    → columns: Task, Model, Gherkin_tokens
+
+    # # 2) load the 30 unique regulatory counts
+    # reg_df = compute_unique_reg_tokens('/home/shabnam/Gherkin/token input/Uniqe Tasks.xlsx')
+    # #    → columns: Task, Reg_tokens
+
+    # # 3) merge so each (Task,Model) row has its Reg_tokens
+    # merged = gherkin_df.merge(reg_df, on='Task')
+
+    # # 4) summary statistics
+    # reg_stats     = merged['Reg_tokens'].agg(['mean','median','std'])
+    # gherkin_stats = merged['Gherkin_tokens'].agg(['mean','median','std'])
+
+    # print("Reg tokens:",     reg_stats.to_dict())
+    # print("Gherkin tokens:", gherkin_stats.to_dict())
+
+    # # 5) scatter plot
+    # plt.figure(figsize=(8,6))
+    # plt.scatter(merged['Reg_tokens'], merged['Gherkin_tokens'], alpha=0.7)
+    # plt.xlabel('Regulatory Provision Token Count')
+    # plt.ylabel('Gherkin Token Count')
+    # plt.title('Reg vs. Gherkin Token Counts (60 specs)')
+    # plt.tight_layout()
+    # plt.savefig(os.path.join(output_token_dir, 'reg_vs_gherkin_scatter.pdf'))
+    # plt.show()
+    # --- token‐count analysis ---
+    token_df = compute_token_counts(input_dir)
+
+    # 1) summary stats
+    stats = token_df[['Reg_tokens','Gherkin_tokens']].agg(['mean','median','std']).T
+    stats.to_csv(os.path.join(output_token_dir, 'token_counts_summary.csv'))
+
+    # 2) scatter plot
+    token_plot_dir = os.path.join(output_boxplots_dir, 'token_scatter')
+    plot_token_scatter(token_df, output_token_dir)
 
 
 
