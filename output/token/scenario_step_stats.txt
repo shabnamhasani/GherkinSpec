@@ -1,0 +1,4 @@
+Average steps per scenario: 3.9662162162162162
+Average step length (words): 10.890971039182283
+Average step length (chars): 63.58943781942078
+Average step length (tokens): 12.269165247018739

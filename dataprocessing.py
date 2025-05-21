@@ -165,6 +165,12 @@ def read_long_data(input_dir, rating_map):
                             # Determine the model using the mapping dictionary
                             m_id = user_task_model_map.get(user_num, {}).get(task_num, None)
                             model_name = model_id_to_name(m_id)
+
+                            # **NEW**: grab the texts and compute GPT‐token counts
+                            reg_txt     = str(df.iat[row_idx, 1])
+                            gherkin_txt = str(df.iat[row_idx, 2])
+                            reg_tokens     = gpt_token_count(reg_txt)
+                            gherkin_tokens = gpt_token_count(gherkin_txt)
                             
                             all_data_long.append({
                                 "User": user_id,
@@ -174,121 +180,114 @@ def read_long_data(input_dir, rating_map):
                                 "Rating (num)": rating_num,
                                 "Rating (label)": raw_val,
                                 "Model": model_name,
+                                "Reg_tokens": reg_tokens,
+                                "Gherkin_tokens": gherkin_tokens,
+                                "Reg_text":     reg_txt,       # raw regulatory text
+                                "Gherkin_text": gherkin_txt    # raw Gherkin scenario
+
                             })
     return pd.DataFrame(all_data_long)
-
-import os, re
-import pandas as pd
 
 def gpt_token_count(text):
     return len(ENCODING.encode(text))
 
-def compute_unique_gherkin_counts(input_dir, user_task_model_map=user_task_model_map):
+def compute_token_counts(long_df):
     """
-    Reads every P<user>_*.xlsx, applies your user→(task→model) map,
-    counts Gherkin tokens for each (Task,Model), then drops duplicates
-    so each spec is counted exactly once.
-    Returns a DataFrame with columns: Task, Model, Gherkin_tokens.
+    Given a long-format DataFrame with columns:
+      - 'User', 'UserNum', 'Task', 'Reg_tokens', 'Gherkin_tokens', and 'Model'
+    Return one unique row per (User, Task) with those token counts (drops duplicate criteria rows).
     """
-    records = []
-    for fname in os.listdir(input_dir):
-        if not fname.lower().endswith(('.xls','.xlsx')):
-            continue
+    df = long_df[['User', 'UserNum', 'Task', 'Reg_tokens', 'Gherkin_tokens', 'Model', 'Reg_text', 'Gherkin_text']]
+    # Drop multiple ratings per criterion to keep one row per task
+    df = df.drop_duplicates(subset=['User', 'Task'])
+    return df.reset_index(drop=True)
 
-        # extract user number (e.g. "P3_Parham.xlsx" → 3)
-        m = re.search(r'P(\d+)_', fname)
-        if not m:
-            continue
-        user = int(m.group(1))
-
-        # open the workbook
-        wb = pd.ExcelFile(os.path.join(input_dir, fname))
-        for sheet in wb.sheet_names:
-            df = pd.read_excel(wb, sheet_name=sheet, header=None)
-
-            # your map tells us which 12 tasks this user actually saw
-            for task_id, model_id in user_task_model_map[user].items():
-                # rows 4–15 correspond to Task 1…12, so index = 3 + task_id
-                row = 3 + task_id
-                text = str(df.iat[row, 2])              # col 2 is the Gherkin spec
-                # tokens = len(text.split())              # whitespace split
-                tokens = gpt_token_count(text)
-
-                records.append({
-                    'Task':           task_id,
-                    'Model':          model_id,
-                    'Gherkin_tokens': tokens
-                })
-
-    # make a DataFrame and drop any duplicate (Task,Model) rows
-    gdf = pd.DataFrame.from_records(records)
-    return (
-        gdf
-        .drop_duplicates(subset=['Task','Model'])
-        .sort_values(['Task','Model'])
-        .reset_index(drop=True)
-    )
-
-import pandas as pd
-
-def compute_unique_reg_tokens(reg_file_path):
+def get_token_stats(token_df):
     """
-    Reads the sheet of unique regulatory provisions (30 rows):
-      • Excel rows 2–31 (zero‐based index 1–30)
-      • Col 0: Task ID (1–30)
-      • Col 1: the provision text
-
-    Returns a DataFrame with columns: Task (int), Reg_tokens (int).
+    Compute summary statistics (mean, median, std) for token counts.
+    Returns a DataFrame indexed by ['Reg_tokens','Gherkin_tokens'] with columns ['Mean','Median','StdDev'].
     """
-    df = pd.read_excel(reg_file_path, header=None)
+    stats = token_df[['Reg_tokens','Gherkin_tokens']].agg(['mean','median','std']).T
+    stats.columns = ['Mean','Median','StdDev']
+    return stats
 
-    recs = []
-    for idx in range(1, 31):                # Excel row 2 through 31
-        # try to grab Task ID from col 0, else fall back to idx
-        try:
-            task = int(df.iat[idx, 0])
-        except:
-            task = idx
-
-        text = str(df.iat[idx, 1])         # second column = the provision
-        # tokens = len(text.split())
-        tokens = gpt_token_count(text)     # use the GPT tokenizer
-        recs.append({'Task': task, 'Reg_tokens': tokens})
-
-    return pd.DataFrame(recs)
-
-def compute_token_counts(input_dir):
+def average_steps_per_scenario(df, text_col='Gherkin_text'):
     """
-    Walks all Excel files and sheets, reads rows 4–15, columns 1 (reg text) 
-    and 2 (Gherkin text), tokenizes on whitespace, and returns a DataFrame 
-    with columns: UserNum, Task, Reg_tokens, Gherkin_tokens.
+    Calculate the average number of Gherkin steps per scenario.
+    Splits each cell into multiple scenarios on 'Scenario:' and 'Scenario Outline:'.
+    Steps are lines starting with Given, When, Then, And, But.
     """
-    records = []
-    for file in os.listdir(input_dir):
-        if not file.lower().endswith(('.xlsx',' .xls')): continue
-        wb = pd.ExcelFile(os.path.join(input_dir, file))
-        user_match = re.search(r'(\d+)', os.path.splitext(file)[0])
-        user_num = int(user_match.group(1)) if user_match else None
+    step_keywords = ('Given', 'When', 'Then', 'And', 'But')
+    scenario_keywords = ('Scenario:', 'Scenario Outline:')
+    total_steps = 0
+    total_scenarios = 0
 
-        for sheet in wb.sheet_names:
-            df = pd.read_excel(wb, sheet_name=sheet, header=None)
-            for row in range(4, 16):
-                task_cell = str(df.iat[row, 0])
-                m = re.search(r'(\d+)', task_cell)
-                if not m: continue
-                task = int(m.group(1))
+    for txt in df[text_col].dropna():
+        lines = txt.splitlines()
+        # split into scenario blocks
+        scenario_blocks = []
+        current = []
+        for line in lines:
+            stripped = line.strip()
+            if any(stripped.startswith(key) for key in scenario_keywords):
+                if current:
+                    scenario_blocks.append(current)
+                current = [stripped]
+            else:
+                if current:
+                    current.append(stripped)
+        if current:
+            scenario_blocks.append(current)
 
-                reg_txt     = str(df.iat[row, 1])
-                gherkin_txt = str(df.iat[row, 2])
+        # count steps in each block
+        for block in scenario_blocks:
+            steps = [ln for ln in block if any(ln.startswith(k) for k in step_keywords)]
+            total_steps += len(steps)
+            total_scenarios += 1
 
-                records.append({
-                    'UserNum':        user_num,
-                    'Task':           task,
-                    # 'Reg_tokens':     len(reg_txt.split()),
-                    'Reg_tokens':gpt_token_count(reg_txt),
-                    #'Gherkin_tokens': len(gherkin_txt.split()
-                    'Gherkin_tokens': gpt_token_count(gherkin_txt)})
-    return pd.DataFrame(records)
+    return total_steps / total_scenarios if total_scenarios else 0
+
+
+def average_step_length(df, text_col='Gherkin_text', mode='words'):
+    """
+    Calculate average length of each step across all scenarios.
+    mode: 'words' (split by whitespace), 'chars' (character count), or 'gpt_tokens' (via gpt_token_count).
+    """
+    step_keywords = ('Given', 'When', 'Then', 'And', 'But')
+    scenario_keywords = ('Scenario:', 'Scenario Outline:')
+    lengths = []
+
+    for txt in df[text_col].dropna():
+        lines = txt.splitlines()
+        # split into scenario blocks
+        scenario_blocks = []
+        current = []
+        for line in lines:
+            stripped = line.strip()
+            if any(stripped.startswith(key) for key in scenario_keywords):
+                if current:
+                    scenario_blocks.append(current)
+                current = [stripped]
+            else:
+                if current:
+                    current.append(stripped)
+        if current:
+            scenario_blocks.append(current)
+
+        # measure each step
+        for block in scenario_blocks:
+            steps = [ln for ln in block if any(ln.startswith(k) for k in step_keywords)]
+            for step in steps:
+                if mode == 'words':
+                    lengths.append(len(step.split()))
+                elif mode == 'chars':
+                    lengths.append(len(step))
+                elif mode == 'gpt_tokens':
+                    lengths.append(gpt_token_count(step))
+                else:
+                    raise ValueError(f"Unknown mode: {mode}")
+
+    return sum(lengths) / len(lengths) if lengths else 0
 
 def compute_pair_stats(long_df, pair_size=2):
     """

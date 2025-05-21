@@ -400,18 +400,33 @@ def plot_stacked_bar_by_criterion_and_model(long_df, qualitative_mappings, outpu
             out_path = os.path.join(output_dir, fname)
             fig.savefig(out_path, bbox_inches="tight")
             plt.close(fig)
-def plot_token_scatter(token_df, output_dir):
+def plot_token_scatter(token_df, output_dir, model_colors=None):
     """
-    Scatter‐plots Reg_tokens (x) vs. Gherkin_tokens (y) for all observations,
-    and saves to output_dir/token_scatter.pdf.
+    Scatter-plot Reg_tokens (x) vs. Gherkin_tokens (y), coloring by 'Model'.
+    token_df must include 'Model'.
+    model_colors: dict mapping model names to color strings (e.g., {'Llama':'blue','Claude':'red'}).
     """
-    os.makedirs(output_dir, exist_ok=True)
-
     plt.figure(figsize=(8,6))
-    plt.scatter(token_df['Reg_tokens'], token_df['Gherkin_tokens'], alpha=0.7)
+
+    # Default color mapping
+    if model_colors is None:
+        model_colors = {'Llama':'blue', 'Claude':'red'}
+
+    # Plot each model's points
+    for model, color in model_colors.items():
+        sub = token_df[token_df['Model'] == model]
+        if sub.empty:
+            continue
+        plt.scatter(sub['Reg_tokens'], sub['Gherkin_tokens'],
+                    alpha=0.7, label=model, color=color)
+
     plt.xlabel('Regulatory Provision Token Count')
     plt.ylabel('Gherkin Specification Token Count')
-    plt.title('Reg vs. Gherkin Token Counts')
+    plt.title('Reg vs. Gherkin Token Counts by Model')
+    plt.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'token_scatter.pdf'))
+    out_path = os.path.join(output_dir, 'token_scatter_colored.pdf')
+    plt.savefig(out_path)
     plt.close()
+
+
