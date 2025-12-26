@@ -1,0 +1,6 @@
+Pair,WilcoxonStat,p-value,n_pairs,n_nonzero,A12,A12_desc
+"['P1_Parham_Sheet1', 'P2_Dipeeka_Sheet1']",4.0,0.125,12,7,0.22448979591836737,Large
+"['P3_MO_Sheet1', 'P4_Armina_Sheet1']",0.0,0.03125,12,6,0.05555555555555558,Large
+"['P5_ Delaram_Sheet1', 'P6_ Baharin_Sheet1']",0.0,0.03125,12,6,0.9583333333333334,Large
+"['P7_ Jia_Sheet1', 'P8_ Negin_Sheet1']",0.0,1.0,12,1,0.0,Large
+"['P9_ Pouya_Sheet1', 'P10_ Diane_Sheet1']",4.0,0.21875,12,6,0.29166666666666663,Medium

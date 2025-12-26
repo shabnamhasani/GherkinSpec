@@ -1,6 +1,6 @@
 import re
 import pandas as pd
-from scipy.stats import ranksums
+from scipy.stats import ranksums, wilcoxon
 from itertools import combinations
 
 def Average(lst):
@@ -219,4 +219,250 @@ def compute_model_wilcoxon(long_df, rating_col="Rating (num)", model_pair=None):
         results_by_criterion[criterion] = pd.DataFrame(pair_results)
     
     return results_by_criterion
+
+def compute_model_signed_wilcoxon(long_df, rating_col="Rating (num)", model_pair=None, min_pairs=1):
+    """
+    Compute paired Wilcoxon signed-rank tests per criterion between two models.
+
+    For each criterion, this function finds users who have ratings for both models
+    and performs the Wilcoxon signed-rank test on the paired ratings. If a user
+    has multiple ratings for the same (criterion, model), their ratings are
+    averaged so that each user contributes a single paired value per model.
+
+    Parameters:
+      long_df (pd.DataFrame): long-format DataFrame containing at least the columns
+          "User", "Criterion", "Model", and the numeric rating column.
+      rating_col (str): name of the column containing numeric ratings.
+      model_pair (tuple of str, optional): pair of model names to compare. If None,
+          the function will compute signed-rank tests for all pairwise combinations
+          of models present for each criterion.
+      min_pairs (int): minimum number of paired users required to run the test.
+
+    Returns:
+      dict: mapping from Criterion -> DataFrame with columns:
+            - "ModelPair"
+            - "WilcoxonStat"
+            - "p-value"
+            - "n_pairs"
+    """
+    criteria_list = long_df["Criterion"].unique()
+    results_by_criterion = {}
+
+    for criterion in criteria_list:
+        crit_data = long_df[long_df["Criterion"] == criterion]
+        models_present = sorted(crit_data["Model"].dropna().unique())
+
+        if model_pair is not None:
+            pair_list = [model_pair] if (model_pair[0] in models_present and model_pair[1] in models_present) else []
+        else:
+            # all unique pairs
+            from itertools import combinations
+            pair_list = list(combinations(models_present, 2))
+
+        pair_results = []
+        for pair in pair_list:
+            model_a, model_b = pair
+
+            # subset data for each model and compute per-user average rating
+            a_df = crit_data[crit_data["Model"] == model_a]
+            b_df = crit_data[crit_data["Model"] == model_b]
+
+            # group by user and average rating to get one value per user per model
+            a_by_user = a_df.groupby("User")[rating_col].mean()
+            b_by_user = b_df.groupby("User")[rating_col].mean()
+
+            # find users present in both
+            common_users = a_by_user.index.intersection(b_by_user.index)
+
+            n_pairs = len(common_users)
+
+            if n_pairs < min_pairs:
+                stat = pval = None
+                n_nonzero = 0
+                a12_val = a12_desc = None
+            else:
+                a_vals = a_by_user.loc[common_users].values
+                b_vals = b_by_user.loc[common_users].values
+
+                # Preprocess paired arrays: remove pairs with NaNs and optionally
+                # zero differences so the signed-rank test is well-defined.
+                import numpy as _np
+                import warnings as _warnings
+
+                # ensure numpy arrays
+                a_vals = _np.asarray(a_vals)
+                b_vals = _np.asarray(b_vals)
+
+                # remove any pairs with NaN
+                valid_mask = _np.isfinite(a_vals) & _np.isfinite(b_vals)
+                a_clean = a_vals[valid_mask]
+                b_clean = b_vals[valid_mask]
+
+                # differences
+                diffs = a_clean - b_clean
+
+                # remove zero differences (these provide no information for signed test)
+                nonzero_mask = diffs != 0
+                diffs_filtered = diffs[nonzero_mask]
+                a_filtered = a_clean[nonzero_mask]
+                b_filtered = b_clean[nonzero_mask]
+
+                # If after filtering we have too few observations, the test is not applicable.
+                n_nonzero = diffs_filtered.size
+                if n_nonzero < 1:
+                    stat = pval = None
+                    a12_val = a12_desc = None
+                else:
+                    try:
+                        with _warnings.catch_warnings():
+                            _warnings.simplefilter("ignore", category=RuntimeWarning)
+                            # Pass the filtered differences directly to wilcoxon
+                            stat, pval = wilcoxon(diffs_filtered, zero_method="wilcox")
+                        # If result is NaN, treat as not-applicable
+                        if not _np.isfinite(stat) or not _np.isfinite(pval):
+                            stat = pval = None
+                    except Exception:
+                        stat = pval = None
+
+                    # compute Vargha-Delaney A12 effect size on the filtered paired values
+                    try:
+                        a12_val, a12_desc = a12(a_filtered.tolist(), b_filtered.tolist())
+                    except Exception:
+                        a12_val = a12_desc = None
+
+            pair_results.append({
+                "ModelPair": f"{model_a} vs {model_b}",
+                "WilcoxonStat": stat,
+                "p-value": pval,
+                "n_pairs": n_pairs,
+                "n_nonzero": int(n_nonzero) if 'n_nonzero' in locals() else 0,
+                "A12": a12_val if 'a12_val' in locals() else None,
+                "A12_desc": a12_desc if 'a12_desc' in locals() else None
+            })
+
+        results_by_criterion[criterion] = pd.DataFrame(pair_results)
+
+    return results_by_criterion
+
+def compute_pair_signed_wilcoxon(long_df, pair_size=2, rating_col="Rating (num)"):
+    """
+    Perform paired Wilcoxon signed-rank tests for user pairs on each criterion.
+
+    This function groups users into pairs (like `compute_pair_wilcoxon`) and for
+    each pair and each criterion finds tasks that both users rated, then runs
+    a Wilcoxon signed-rank test on their paired ratings (per-task).
+
+    Parameters:
+      long_df (pd.DataFrame): long-format DataFrame containing at least the columns
+          "User", "Task", "Criterion", and the numeric rating column.
+      pair_size (int): number of users per group when forming pairs (default 2).
+      rating_col (str): name of the numeric rating column.
+
+    Returns:
+      dict: mapping Criterion -> DataFrame with columns: "Pair", "WilcoxonStat",
+            "p-value", "n_pairs" (number of paired observations / tasks).
+    """
+    # 1. Get unique users in the order they appear
+    users = list(dict.fromkeys(long_df["User"]))
+
+    # Try to extract numeric id for stable ordering
+    def extract_numeric_id(user_str):
+        import re
+        match = re.match(r"P(\d+)_", user_str)
+        return int(match.group(1)) if match else 999999
+
+    users.sort(key=extract_numeric_id)
+
+    # 2. Group users into pairs of size `pair_size`
+    user_pairs = [users[i:i+pair_size] for i in range(0, len(users), pair_size)]
+
+    criteria_list = long_df["Criterion"].unique()
+    results_by_criterion = {}
+
+    for criterion in criteria_list:
+        crit_data = long_df[long_df["Criterion"] == criterion]
+        pair_results = []
+
+        # create a pivot of Task x User for this criterion (averaging if multiple entries)
+        pivot = crit_data.pivot_table(index="Task", columns="User", values=rating_col, aggfunc="mean")
+
+        for pair in user_pairs:
+            if len(pair) < 2:
+                continue
+
+            user1, user2 = pair
+
+            if user1 not in pivot.columns or user2 not in pivot.columns:
+                pair_results.append({
+                    "Pair": pair,
+                    "WilcoxonStat": None,
+                    "p-value": None,
+                    "n_pairs": 0,
+                    "n_nonzero": 0,
+                    "A12": None,
+                    "A12_desc": None
+                })
+                continue
+
+            paired = pivot[[user1, user2]].dropna()
+            n_pairs = paired.shape[0]
+
+            if n_pairs == 0:
+                stat = pval = None
+                n_nonzero = 0
+                a12_val = a12_desc = None
+            else:
+                import numpy as _np
+                import warnings as _warnings
+
+                a_vals = paired[user1].values
+                b_vals = paired[user2].values
+
+                a_vals = _np.asarray(a_vals)
+                b_vals = _np.asarray(b_vals)
+
+                valid_mask = _np.isfinite(a_vals) & _np.isfinite(b_vals)
+                a_clean = a_vals[valid_mask]
+                b_clean = b_vals[valid_mask]
+
+                diffs = a_clean - b_clean
+                nonzero_mask = diffs != 0
+                diffs_filtered = diffs[nonzero_mask]
+                a_filtered = a_clean[nonzero_mask]
+                b_filtered = b_clean[nonzero_mask]
+
+                n_nonzero = diffs_filtered.size
+                if n_nonzero < 1:
+                    stat = pval = None
+                    a12_val = a12_desc = None
+                else:
+                    try:
+                        with _warnings.catch_warnings():
+                            _warnings.simplefilter("ignore", category=RuntimeWarning)
+                            # Pass the filtered differences directly to wilcoxon
+                            stat, pval = wilcoxon(diffs_filtered, zero_method="wilcox")
+                        if not _np.isfinite(stat) or not _np.isfinite(pval):
+                            stat = pval = None
+                    except Exception:
+                        stat = pval = None
+
+                    try:
+                        a12_val, a12_desc = a12(a_filtered.tolist(), b_filtered.tolist())
+                    except Exception:
+                        a12_val = a12_desc = None
+
+            pair_results.append({
+                "Pair": pair,
+                "WilcoxonStat": stat,
+                "p-value": pval,
+                "n_pairs": n_pairs,
+                "n_nonzero": int(n_nonzero) if 'n_nonzero' in locals() else 0,
+                "A12": a12_val if 'a12_val' in locals() else None,
+                "A12_desc": a12_desc if 'a12_desc' in locals() else None
+            })
+
+        results_by_criterion[criterion] = pd.DataFrame(pair_results)
+
+    return results_by_criterion
+
 

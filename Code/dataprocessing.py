@@ -82,14 +82,15 @@ def read_excel_data(input_dir, rating_map):
                     task_ids = df.iloc[task_rows, 0].tolist()
                     # print(f"Extracted task IDs: {task_ids}")
                 if not criteria_names:
-                    criteria_names = df.iloc[0, criteria_columns].tolist()
+                    criteria_names = [str(c).strip() for c in df.iloc[0, criteria_columns].tolist()]
                     # print(f"Extracted criteria names: {criteria_names}")
                     
                 user_id = f"{os.path.splitext(file)[0]}_{sheet_name}"
                 user_dict = {}
                 for col_idx, criterion in zip(criteria_columns, criteria_names):
+                    criterion_clean = str(criterion).strip()
                     ratings = [rating_map.get(df.iloc[row_idx, col_idx], None) for row_idx in task_rows]
-                    user_dict[criterion] = ratings
+                    user_dict[criterion_clean] = ratings
                     # print(f"Ratings for {criterion}: {ratings}")
                 all_user_data[user_id] = user_dict
                 # print(f"Processed {user_id} from {file_path}")
@@ -97,7 +98,6 @@ def read_excel_data(input_dir, rating_map):
                 # print("-" * 40)
     # print(f"Total users processed: {len(all_user_data)}")
     return all_user_data, task_ids, criteria_names
-
 def create_summary_dfs(all_user_data, task_ids, criteria_names):
     """
     Creates a dictionary mapping each criterion to its summary DataFrame.
@@ -119,7 +119,6 @@ def create_summary_dfs(all_user_data, task_ids, criteria_names):
         df.index.name = "Task"
         summary_dfs[criterion] = df
     return summary_dfs
-
 def write_summary_excel(output_path, summary_dfs):
     """
     Writes each criterion's summary DataFrame to a separate sheet in the output Excel file.
@@ -129,7 +128,6 @@ def write_summary_excel(output_path, summary_dfs):
             # print(f"Writing DataFrame for {criterion}:\n{df}")
             df.to_excel(writer, sheet_name=criterion)
     # print(f"✅ Saved summary to: {output_path}")
-
 def read_long_data(input_dir, rating_map):
     all_data_long = []
     for file in os.listdir(input_dir):
@@ -142,7 +140,8 @@ def read_long_data(input_dir, rating_map):
                 task_rows = range(4, 16)
                 criteria_columns = range(3, 8)  # for your criteria columns
                 # Extract criteria names from the sheet (first row in those columns)
-                criteria_names = df.iloc[0, criteria_columns].tolist()
+                # Normalize: strip whitespace from criterion names to handle 'Singularity ' -> 'Singularity'
+                criteria_names = [str(c).strip() for c in df.iloc[0, criteria_columns].tolist()]
                 
                 # Construct user_id and extract numeric part (assumes file name like "User1.xlsx")
                 user_id = f"{os.path.splitext(file)[0]}_{sheet_name}"
@@ -150,6 +149,7 @@ def read_long_data(input_dir, rating_map):
                 user_num = int(match.group(1)) if match else None
                 
                 for col_idx, criterion in zip(criteria_columns, criteria_names):
+                    criterion_clean = str(criterion).strip()  # normalize criterion name
                     for row_idx in task_rows:
                         raw_val = df.iloc[row_idx, col_idx]
                         rating_num = rating_map.get(raw_val, None)
@@ -176,7 +176,7 @@ def read_long_data(input_dir, rating_map):
                                 "User": user_id,
                                 "UserNum": user_num,
                                 "Task": task_num,  # now an integer 1..12
-                                "Criterion": criterion,
+                                "Criterion": criterion_clean,  # normalized (whitespace stripped)
                                 "Rating (num)": rating_num,
                                 "Rating (label)": raw_val,
                                 "Model": model_name,
@@ -187,10 +187,8 @@ def read_long_data(input_dir, rating_map):
 
                             })
     return pd.DataFrame(all_data_long)
-
 def gpt_token_count(text):
     return len(ENCODING.encode(text))
-
 def compute_token_counts(long_df):
     """
     Given a long-format DataFrame with columns:
@@ -201,7 +199,6 @@ def compute_token_counts(long_df):
     # Drop multiple ratings per criterion to keep one row per task
     df = df.drop_duplicates(subset=['User', 'Task'])
     return df.reset_index(drop=True)
-
 def get_token_stats(token_df):
     """
     Compute summary statistics (mean, median, std) for token counts.
@@ -210,7 +207,14 @@ def get_token_stats(token_df):
     stats = token_df[['Reg_tokens','Gherkin_tokens']].agg(['mean','median','std']).T
     stats.columns = ['Mean','Median','StdDev']
     return stats
-
+def get_token_lists(token_df):
+     """
+     Return the raw token counts for box-plotting.
+     """
+     # dropna in case you have missing rows
+     regs    = token_df['Reg_tokens'].dropna().tolist()
+     gherkin = token_df['Gherkin_tokens'].dropna().tolist()
+     return regs, gherkin
 def average_steps_per_scenario(df, text_col='Gherkin_text'):
     """
     Calculate the average number of Gherkin steps per scenario.
@@ -246,8 +250,38 @@ def average_steps_per_scenario(df, text_col='Gherkin_text'):
             total_scenarios += 1
 
     return total_steps / total_scenarios if total_scenarios else 0
+def get_steps_per_scenario_list(df, text_col='Gherkin_text'):
+    """
+    Return a list of “number of steps” for each scenario in the Gherkin text.
+    """
+    step_keywords     = ('Given', 'When', 'Then', 'And', 'But')
+    scenario_keywords = ('Scenario:', 'Scenario Outline:')
+    counts = []
 
+    for txt in df[text_col].dropna():
+        lines = txt.splitlines()
+        scenario_blocks = []
+        current = []
 
+        # 1) split into scenario blocks
+        for line in lines:
+            stripped = line.strip()
+            if any(stripped.startswith(k) for k in scenario_keywords):
+                if current:
+                    scenario_blocks.append(current)
+                current = [stripped]
+            else:
+                if current:
+                    current.append(stripped)
+        if current:
+            scenario_blocks.append(current)
+
+        # 2) count steps in each block
+        for block in scenario_blocks:
+            n = sum(1 for ln in block if any(ln.startswith(k) for k in step_keywords))
+            counts.append(n)
+
+    return counts
 def average_step_length(df, text_col='Gherkin_text', mode='words'):
     """
     Calculate average length of each step across all scenarios.
@@ -289,6 +323,129 @@ def average_step_length(df, text_col='Gherkin_text', mode='words'):
 
     return sum(lengths) / len(lengths) if lengths else 0
 
+    """
+    Return a flat list of every Gherkin step length across all scenarios.
+
+    Splits each cell on 'Scenario:' or 'Scenario Outline:' exactly
+    as in average_step_length(), then for each step line (Given/When/Then/And/But)
+    measures its length according to `mode`:
+       - 'words'      → number of whitespace‐separated tokens
+       - 'chars'      → number of characters
+       - 'gpt_tokens' → uses your gpt_token_count(step) function
+    """
+    step_keywords     = ('Given', 'When', 'Then', 'And', 'But')
+    scenario_keywords = ('Scenario:', 'Scenario Outline:')
+    lengths = []
+
+    for txt in df[text_col].dropna():
+        lines = txt.splitlines()
+
+        # 1) split into scenario_blocks
+        scenario_blocks = []
+        current = []
+        for line in lines:
+            stripped = line.strip()
+            if any(stripped.startswith(k) for k in scenario_keywords):
+                # start of a new scenario
+                if current:
+                    scenario_blocks.append(current)
+                current = [stripped]
+            else:
+                # continuation of the current scenario
+                if current:
+                    current.append(stripped)
+        if current:
+            scenario_blocks.append(current)
+
+        # 2) extract every step line and measure its length
+        for block in scenario_blocks:
+            for ln in block:
+                if any(ln.startswith(k) for k in step_keywords):
+                    if mode == 'words':
+                        lengths.append(len(ln.split()))
+                    elif mode == 'chars':
+                        lengths.append(len(ln))
+                    elif mode == 'gpt_tokens':
+                        lengths.append(gpt_token_count(ln))
+                    else:
+                        raise ValueError(f"Unknown mode: {mode}")
+
+    return lengths
+
+    """
+    Return a list of step-counts, one entry per scenario.
+    """
+    step_keywords     = ('Given', 'When', 'Then', 'And', 'But')
+    scenario_keywords = ('Scenario:', 'Scenario Outline:')
+    counts = []
+
+    for txt in df[text_col].dropna():
+        lines = txt.splitlines()
+        scenario_blocks = []
+        current = []
+
+        # split into scenario blocks
+        for line in lines:
+            stripped = line.strip()
+            if any(stripped.startswith(k) for k in scenario_keywords):
+                if current:
+                    scenario_blocks.append(current)
+                current = [stripped]
+            else:
+                if current:
+                    current.append(stripped)
+        if current:
+            scenario_blocks.append(current)
+
+        # count steps in each block
+        for block in scenario_blocks:
+            n = sum(1 for ln in block if any(ln.startswith(k) for k in step_keywords))
+            counts.append(n)
+
+    return counts
+def get_step_length_list(df, text_col='Gherkin_text', mode='words'):
+    """
+    Return a flat list of step lengths in the given mode:
+      - 'words'      → number of words per step
+      - 'chars'      → number of characters per step
+      - 'gpt_tokens' → number of GPT‐style tokens per step
+    """
+    step_keywords     = ('Given', 'When', 'Then', 'And', 'But')
+    scenario_keywords = ('Scenario:', 'Scenario Outline:')
+    lengths = []
+
+    for txt in df[text_col].dropna():
+        lines = txt.splitlines()
+        scenario_blocks = []
+        current = []
+
+        # split into scenario blocks
+        for line in lines:
+            stripped = line.strip()
+            if any(stripped.startswith(k) for k in scenario_keywords):
+                if current:
+                    scenario_blocks.append(current)
+                current = [stripped]
+            else:
+                if current:
+                    current.append(stripped)
+        if current:
+            scenario_blocks.append(current)
+
+        # extract and measure each step
+        for block in scenario_blocks:
+            for ln in block:
+                if any(ln.startswith(k) for k in step_keywords):
+                    if mode == 'words':
+                        lengths.append(len(ln.split()))
+                    elif mode == 'chars':
+                        lengths.append(len(ln))
+                    elif mode == 'gpt_tokens':
+                        lengths.append(gpt_token_count(ln))
+                    else:
+                        raise ValueError(f"Unknown mode: {mode}")
+
+    return lengths
 def compute_pair_stats(long_df, pair_size=2):
     """
     Groups users into pairs in the order of their numeric identifier (e.g., P1 with P2, P3 with P4, etc.)
@@ -327,6 +484,47 @@ def compute_pair_stats(long_df, pair_size=2):
         stats_by_criterion[criterion] = pd.DataFrame(pair_stats)
     return stats_by_criterion
 
+
+    """
+    Return a flat list of every Gherkin step length across all scenarios.
+    mode: 'words', 'chars', or 'gpt_tokens'
+    """
+    step_keywords     = ('Given', 'When', 'Then', 'And', 'But')
+    scenario_keywords = ('Scenario:', 'Scenario Outline:')
+    lengths = []
+
+    for txt in df[text_col].dropna():
+        lines = txt.splitlines()
+        scenario_blocks = []
+        current = []
+
+        # split into scenario blocks
+        for line in lines:
+            stripped = line.strip()
+            if any(stripped.startswith(k) for k in scenario_keywords):
+                if current:
+                    scenario_blocks.append(current)
+                current = [stripped]
+            else:
+                if current:
+                    current.append(stripped)
+        if current:
+            scenario_blocks.append(current)
+
+        # measure each step
+        for block in scenario_blocks:
+            for ln in block:
+                if any(ln.startswith(k) for k in step_keywords):
+                    if mode == 'words':
+                        lengths.append(len(ln.split()))
+                    elif mode == 'chars':
+                        lengths.append(len(ln))
+                    elif mode == 'gpt_tokens':
+                        lengths.append(gpt_token_count(ln))
+                    else:
+                        raise ValueError(f"Unknown mode: {mode}")
+
+    return lengths
 # Export the rating_map too in case other modules need it.
 __all__ = [
     "rating_map",
@@ -334,5 +532,17 @@ __all__ = [
     "create_summary_dfs",
     "write_summary_excel",
     "read_long_data",
-    "compute_pair_stats"
+    "compute_pair_stats",
+    "gpt_token_count",
+    "compute_token_counts",
+    "get_token_stats",
+    "get_token_lists",
+    "average_steps_per_scenario",
+    "get_steps_per_scenario_list",
+    "average_step_length",
+    "get_step_length_list",
+    "model_id_to_name",
+    "user_task_model_map",
+    "ENCODING",
+    "compute_token_counts",
 ]
