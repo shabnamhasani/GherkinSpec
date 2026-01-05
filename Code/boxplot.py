@@ -112,12 +112,6 @@ def plot_stacked_bar_by_criterion_and_model(long_df, qualitative_mappings, outpu
             fig.savefig(out_path, bbox_inches="tight")
             plt.close(fig)
 
-
-
-
-
-
-
 def plot_boxplots_by_criterion(long_df, qualitative_mappings, output_dir):
     """
     Generates separate boxplots per criterion.
@@ -181,6 +175,7 @@ def plot_boxplots_by_criterion(long_df, qualitative_mappings, output_dir):
         plt.savefig(plot_path)
         plt.close()
         # print(f"Saved boxplot for {criterion} to: {plot_path}")
+
 def plot_boxplots_by_criterion_and_model(long_df, qualitative_mappings, output_dir):
     """
     Generates separate boxplots per criterion for each model.
@@ -238,6 +233,7 @@ def plot_boxplots_by_criterion_and_model(long_df, qualitative_mappings, output_d
             plt.savefig(plot_path)
             plt.close()
             print(f"Saved boxplot for {criterion} for {model} to: {plot_path}")
+            
 def plot_heatmaps_by_criterion(long_df, qualitative_mappings, output_dir):
     """
     Generates a heatmap per criterion, showing task scores for each user using qualitative labels.
@@ -298,9 +294,9 @@ def plot_heatmaps_by_criterion(long_df, qualitative_mappings, output_dir):
         plot_path = os.path.join(output_dir, f"{criterion}_heatmap.pdf")
         plt.savefig(plot_path)
         plt.close()
-        print(f"✅ Saved heatmap for {criterion} to: {plot_path}")
+        print(f"Saved heatmap for {criterion} to: {plot_path}")
+        
 def plot_beeswarm_by_criterion(long_df, qualitative_mappings, output_dir):
-
     """
     Generates a beeswarm (strip) plot per criterion with jitter to show all individual ratings.
     Saves each plot to output_dir.
@@ -352,6 +348,7 @@ def plot_beeswarm_by_criterion(long_df, qualitative_mappings, output_dir):
         plot_path = os.path.join(output_dir, f"{criterion}_beeswarm.pdf")
         plt.savefig(plot_path)
         plt.close()
+        
 def plot_beeswarm_by_criterion_and_model(long_df, qualitative_mappings, output_dir):
     """
     Generates beeswarm (strip) plots per criterion and per model.
@@ -662,6 +659,7 @@ def plot_beeswarm_by_criterion_and_model(long_df, qualitative_mappings, output_d
             out_path = os.path.join(output_dir, fname)
             fig.savefig(out_path, bbox_inches="tight")
             plt.close(fig)
+            
 def plot_token_scatter(token_df, output_dir, model_colors=None):
     """
     Scatter-plot Reg_tokens (x) vs. Gherkin_tokens (y), coloring by 'Model'.
@@ -698,6 +696,7 @@ def plot_token_scatter(token_df, output_dir, model_colors=None):
     out_path = os.path.join(output_dir, 'token_scatter_colored.pdf')
     plt.savefig(out_path)
     plt.close()
+    
 def generate_token_step_boxplots(input_dir: str, output_dir: str):
     """
     Reads the following CSVs from input_dir:
@@ -729,6 +728,7 @@ def generate_token_step_boxplots(input_dir: str, output_dir: str):
         )
     )
     mean_color = "#67045D"
+    
     def annotate_mean(ax, x_pos, values):
         """Place a dark-green square at the mean, with its value printed next to it."""
         m = values.mean()
@@ -869,10 +869,6 @@ def generate_token_step_boxplots(input_dir: str, output_dir: str):
             out_path = os.path.join(output_dir, fname)
             fig.savefig(out_path, bbox_inches="tight")
             plt.close(fig)
-
-
-
-
     """
     For each criterion × model, draw a horizontal stacked bar with the same
     dimensions and styling as the aggregated plot above.
