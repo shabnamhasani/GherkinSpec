@@ -30,17 +30,16 @@ from dataprocessing import (
 
 def main():
 
-    input_dir = "/home/shabnam/Gherkin/Data/input"
-    output_path = "/home/shabnam/Gherkin/Evaluation/long_dfs.xlsx"
-    output_boxplots_dir = "/home/shabnam/Gherkin/Evaluation/boxplots"
-    output_stats_dir = "/home/shabnam/Gherkin/Evaluation/pair_stats"
-    output_heatmap_dir = "/home/shabnam/Gherkin/Evaluation/heatmaps"
-    output_beeswarm_dir = "/home/shabnam/Gherkin/Evaluation/beeswarm"
-    output_wilcoxon_dir = "/home/shabnam/Gherkin/Evaluation/wilcoxon"
-    output_stacked_bar_dir = "/home/shabnam/Gherkin/Evaluation/stacked_bar"
-    output_token_dir = "/home/shabnam/Gherkin/Evaluation/token"
-    output_tokenstats_dir= "/home/shabnam/Gherkin/Evaluation/token_stats"
-    
+    input_dir = "/Gherkin/Data/input"
+    output_path = "/Gherkin/Evaluation/long_dfs.xlsx"
+    output_boxplots_dir = "/Gherkin/Evaluation/boxplots"
+    output_stats_dir = "/Gherkin/Evaluation/pair_stats"
+    output_heatmap_dir = "/Gherkin/Evaluation/heatmaps"
+    output_beeswarm_dir = "/Gherkin/Evaluation/beeswarm"
+    output_wilcoxon_dir = "/Gherkin/Evaluation/wilcoxon"
+    output_stacked_bar_dir = "/Gherkin/Evaluation/stacked_bar"
+    output_token_dir = "/Gherkin/Evaluation/token"
+    output_tokenstats_dir= "/Gherkin/Evaluation/token_stats"
 
     # Step 1: Read and process data
     all_user_data, task_ids, criteria_names = read_excel_data(input_dir, rating_map)
