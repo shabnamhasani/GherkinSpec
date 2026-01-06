@@ -3,4 +3,4 @@ Gherkin specifications in our study were generated using the chat interfaces of 
 This repository includes:
 1) Our study data under Data (prompt, unique tasks, consent form, interview protocol, recruitment form, and (regulatory provisions, Gherkin specifications, participant ratings, and feedback) under input)
 2) Evaluation code under Code (boxplot, dataprocessing, wilcoxon_stats, main)
-3) Evaluation results under Evaluation (plots and statistical analyses: stacked_bar, token_stats, wilcoxon)
+3) Evaluation results under Evaluation (plots, statistical analyses, and qualitative findings: stacked_bar, token_stats, wilcoxon, qualitative results)
